@@ -1,0 +1,90 @@
+name: DNC Automation
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      client_name:
+        description: 'Client name to process'
+        required: false
+        type: string
+        default: 'test_client'
+      dnc_file:
+        description: 'Specific DNC file to process (optional)'
+        required: false
+        type: string
+  
+  # Scheduled runs
+  schedule:
+    # Run every Monday and Thursday at 9 AM UTC
+    - cron: '0 9 * * 1,4'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  dnc-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install UV
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+    
+    - name: Install dependencies
+      run: |
+        uv sync --dev
+    
+    - name: Create data directories
+      run: |
+        mkdir -p data/uploads data/processed data/archived data/results logs
+    
+    - name: Run DNC check
+      env:
+        HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+        HUBSPOT_INSTANCE_NAME: ${{ secrets.HUBSPOT_INSTANCE_NAME }}
+        SMTP_HOST: ${{ secrets.SMTP_HOST }}
+        SMTP_PORT: ${{ secrets.SMTP_PORT }}
+        EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
+        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
+        CLIENT_NAME: ${{ github.event.inputs.client_name || 'test_client' }}
+        COMPANY_STATUS_PROPERTY: ${{ secrets.COMPANY_STATUS_PROPERTY }}
+        CONTACT_STATUS_PROPERTY: ${{ secrets.CONTACT_STATUS_PROPERTY }}
+        FUZZY_THRESHOLD_MATCH: 90
+        FUZZY_THRESHOLD_REVIEW: 85
+        LOG_LEVEL: INFO
+      run: |
+        source .venv/bin/activate
+        python src/main.py
+    
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: dnc-logs-${{ github.run_number }}
+        path: logs/
+        retention-days: 30
+    
+    - name: Upload results
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: dnc-results-${{ github.run_number }}
+        path: data/results/
+        retention-days: 90
+    
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "DNC automation failed. Check logs for details."
+        # Additional failure notification logic can go here
