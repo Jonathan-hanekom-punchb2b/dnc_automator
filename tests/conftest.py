@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 from unittest.mock import Mock, patch
-from src.hubspot.client import HubSpotClient
+# from src.hubspot.client import HubSpotClient  # Skip for now - no HubSpot access yet
 from src.core.dnc_logic import DNCChecker
 
 @pytest.fixture

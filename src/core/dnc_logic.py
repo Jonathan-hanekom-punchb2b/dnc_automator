@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Pre-compiled Regular Expressions (from original code)
 _RE_NON_ALPHANUMERIC = re.compile(r'[^\w\s]')
 _RE_MULTIPLE_SPACES = re.compile(r'\s+')
-_RE_COMPANY_SUFFIXES = re.compile(r'\b(inc|ltd|llc|corp|pty|company|co|the)\b', re.IGNORECASE)
+_RE_COMPANY_SUFFIXES = re.compile(r'\b(inc|ltd|llc|corp|pty|co|the)\b\.?$', re.IGNORECASE)
 
 @dataclass
 class DNSMatch:
@@ -40,7 +40,7 @@ class DNCChecker:
         if pd.isna(text) or not text:
             return ""
         text = str(text).lower()
-        text = _RE_NON_ALPHANUMERIC.sub('', text)
+        text = _RE_NON_ALPHANUMERIC.sub(' ', text)  # Replace with space, not remove
         text = _RE_MULTIPLE_SPACES.sub(' ', text)
         return text.strip()
 
@@ -66,8 +66,9 @@ class DNCChecker:
         if domain.startswith('www.'):
             domain = domain[4:]
         
-        # Clean using text cleaning method
-        return self.clean_text(domain)
+        # Clean domain specifically - remove punctuation completely
+        domain = _RE_NON_ALPHANUMERIC.sub('', domain)
+        return domain
         
     def process_dnc_list(self, dnc_df: pd.DataFrame) -> pd.DataFrame:
         """Process and clean DNC list data"""

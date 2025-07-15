@@ -38,6 +38,9 @@ dev = [
 [project.scripts]
 dnc-check = "src.main:main"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
 [tool.black]
 line-length = 88
 target-version = ['py311']
@@ -58,3 +61,9 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "--cov=src --cov-report=html --cov-report=term-missing"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+]
