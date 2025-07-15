@@ -159,10 +159,222 @@ DNC_PROCESSED_PATH=data/processed
 DNC_ARCHIVED_PATH=data/archived
 ```
 
-## Development Workflow
+## Git Workflow & GitHub Integration
+
+### Branch Structure
+```
+main          # Production-ready code (protected)
+├── develop   # Integration branch for features
+├── feature/  # Individual feature development
+│   ├── feature/hubspot-integration
+│   ├── feature/email-notifications
+│   └── feature/github-actions
+└── hotfix/   # Critical production fixes (direct to main)
+```
+
+### Development Workflow
+
+#### 1. Feature Development
+```bash
+# Start new feature
+git checkout develop
+git pull origin develop
+git checkout -b feature/your-feature-name
+
+# Work on feature
+git add .
+git commit -m "feat: add new feature description"
+git push origin feature/your-feature-name
+
+# Create PR to develop branch
+gh pr create --base develop --title "feat: Your feature title"
+```
+
+#### 2. Code Review & Testing
+- **Automated Testing**: GitHub Actions runs unit tests, integration tests, and security checks
+- **Self Review**: Review your own code before approving PR
+- **Staging Test**: Test with old client data in HubSpot
+- **Merge**: Squash and merge to develop
+
+#### 3. Release Process
+```bash
+# Create release PR from develop to main
+git checkout develop
+git pull origin develop
+gh pr create --base main --title "release: v1.x.x"
+
+# After approval, merge triggers:
+# - Automated semantic versioning
+# - Release creation with changelog
+# - Production deployment
+```
+
+#### 4. Hotfix Process
+```bash
+# Critical fixes go directly to main
+git checkout main
+git pull origin main
+git checkout -b hotfix/critical-fix-name
+
+# Make fix
+git add .
+git commit -m "fix: critical issue description"
+git push origin hotfix/critical-fix-name
+
+# Create PR directly to main
+gh pr create --base main --title "hotfix: Critical fix title"
+```
+
+### GitHub Actions Workflows
+
+#### 1. Pull Request Validation (`.github/workflows/pr-validation.yml`)
+**Triggers**: Pull requests to `develop` or `main`
+**Actions**:
+- Run unit tests (`uv run pytest tests/unit/ -v`)
+- Run integration tests (`uv run pytest tests/integration/ -v`)
+- Security scanning with CodeQL
+- Dependency vulnerability check
+- Coverage reporting
+
+#### 2. Release & Deploy (`.github/workflows/release-deploy.yml`)
+**Triggers**: Push to `main` branch
+**Actions**:
+- Determine version using semantic-release
+- Create GitHub release with changelog
+- Update production secrets if needed
+- Deploy updated automation workflow
+- Send deployment notification
+
+#### 3. Scheduled DNC Automation (`.github/workflows/dnc-automation.yml`)
+**Triggers**: Scheduled runs (configurable)
+**Actions**:
+- Run DNC automation against HubSpot
+- Process results and update statuses
+- Send email notifications
+- Archive processed files
+
+### Branch Protection Rules
+
+#### Main Branch Protection
+```yaml
+# Requires:
+- Pull request reviews (1 reviewer - yourself)
+- Status checks passing (all tests)
+- Branch up to date before merging
+- No direct pushes (except hotfixes)
+- Dismiss stale reviews on new commits
+```
+
+#### Develop Branch Protection
+```yaml
+# Requires:
+- Status checks passing (all tests)
+- Branch up to date before merging
+- Allow direct pushes for solo development
+```
+
+### Semantic Versioning Rules
+
+#### Version Bumping
+- **Major** (`1.0.0 → 2.0.0`): Breaking changes
+  - `BREAKING CHANGE:` in commit body
+  - Major API changes
+- **Minor** (`1.0.0 → 1.1.0`): New features
+  - `feat:` prefix
+  - New functionality, backwards compatible
+- **Patch** (`1.0.0 → 1.0.1`): Bug fixes
+  - `fix:` prefix
+  - Bug fixes, no new features
+
+#### Commit Message Format
+```
+type(scope): description
+
+[optional body]
+
+[optional footer]
+```
+
+**Examples**:
+```bash
+feat(dnc-logic): add domain-based matching
+fix(hubspot): resolve API rate limiting issue
+docs(readme): update installation instructions
+test(integration): add HubSpot mock tests
+```
+
+### Release Management
+
+#### Automated Releases
+- **Trigger**: Merge to `main`
+- **Process**: 
+  1. Analyze commit history for version bump
+  2. Update version in `pyproject.toml`
+  3. Generate changelog from commit messages
+  4. Create GitHub release
+  5. Update production workflow
+
+#### Manual Release Override
+```bash
+# Force specific version
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+### Development Commands
+
+#### Git Operations
+```bash
+# Quick setup for new feature
+git checkout develop && git pull && git checkout -b feature/my-feature
+
+# Sync feature with develop
+git checkout develop && git pull
+git checkout feature/my-feature && git rebase develop
+
+# Clean up merged branches
+git branch -d feature/completed-feature
+git push origin --delete feature/completed-feature
+
+# Emergency rollback
+git checkout main
+git revert HEAD --no-edit
+git push origin main
+```
+
+#### GitHub CLI Operations
+```bash
+# View pull requests
+gh pr list
+
+# Create PR with template
+gh pr create --template feature
+
+# Merge PR after approval
+gh pr merge --squash
+
+# View deployment status
+gh run list --workflow=release-deploy
+```
+
+### Testing Strategy
+
+#### Automated Testing Pipeline
+1. **Unit Tests**: Fast, isolated component testing
+2. **Integration Tests**: End-to-end workflow testing with mocks
+3. **Security Tests**: Dependency scanning, secret detection
+4. **Performance Tests**: Benchmark DNC processing speed
+
+#### Staging Environment
+- **Test Data**: Use old client data in HubSpot
+- **Dry Run Mode**: Validate logic without updating records
+- **Email Testing**: Send notifications to test recipients
+- **Monitoring**: Track performance metrics
+
+### Development Workflow Phases
 
 ### Phase 1: Setup and Core Logic (Week 1)
-1. **Repository Setup**: Clone existing repo and create automation branch
+1. **Repository Setup**: Initialize Git workflow and branch protection
 2. **HubSpot API Setup**: Create private app and test connection
 3. **Core Logic Integration**: Adapt existing DNC logic for HubSpot data
 
