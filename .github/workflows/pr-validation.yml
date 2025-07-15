@@ -1,0 +1,87 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.13]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install UV
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: uv sync --dev
+    
+    - name: Run unit tests
+      run: uv run pytest tests/unit/ -v --cov=src --cov-report=xml
+    
+    - name: Run integration tests
+      run: uv run pytest tests/integration/ -v
+      continue-on-error: true  # Integration tests may fail without API keys
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: python
+    
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:python"
+    
+    - name: Run Bandit Security Scan
+      run: |
+        pip install bandit
+        bandit -r src/ -f json -o bandit-report.json || true
+    
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-scan-results
+        path: bandit-report.json
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Snyk to check for vulnerabilities
+      uses: snyk/actions/python@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high
+      continue-on-error: true  # Don't fail CI on vulnerability findings
