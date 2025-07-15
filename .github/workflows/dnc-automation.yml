@@ -1,0 +1,135 @@
+name: DNC Automation
+
+on:
+  # Scheduled runs (currently disabled - enable when ready for production)
+  # schedule:
+  #   - cron: '0 9 * * 1-5'  # Run at 9 AM UTC, Monday through Friday
+  
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      client_name:
+        description: 'Client name to process'
+        required: true
+        default: 'test_client'
+      dry_run:
+        description: 'Dry run mode (no actual updates)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
+
+jobs:
+  dnc-automation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install UV
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+    
+    - name: Set up Python
+      run: uv python install 3.13
+    
+    - name: Install dependencies
+      run: uv sync --dev
+    
+    - name: Configure environment
+      run: |
+        echo "Setting up environment for DNC automation..."
+        mkdir -p data/{uploads,processed,archived}
+        mkdir -p logs
+    
+    - name: Run DNC automation
+      env:
+        HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+        HUBSPOT_INSTANCE_NAME: ${{ secrets.HUBSPOT_INSTANCE_NAME }}
+        SMTP_HOST: ${{ secrets.SMTP_HOST }}
+        SMTP_PORT: ${{ secrets.SMTP_PORT }}
+        EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
+        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
+        CLIENT_NAME: ${{ github.event.inputs.client_name || 'test_client' }}
+        DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+        LOG_LEVEL: INFO
+        FUZZY_THRESHOLD_MATCH: 90
+        FUZZY_THRESHOLD_REVIEW: 85
+        COMPANY_BATCH_SIZE: 100
+        CONTACT_BATCH_SIZE: 500
+        COMPANY_STATUS_PROPERTY: test_client_account_status
+        CONTACT_STATUS_PROPERTY: test_client_funnel_status
+        DNC_UPLOAD_PATH: data/uploads
+        DNC_PROCESSED_PATH: data/processed
+        DNC_ARCHIVED_PATH: data/archived
+      run: |
+        echo "🚀 Starting DNC automation for client: $CLIENT_NAME"
+        echo "Dry run mode: $DRY_RUN"
+        
+        # Run the automation
+        uv run python src/main.py
+        
+        echo "✅ DNC automation completed successfully"
+    
+    - name: Upload automation results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dnc-automation-results-${{ github.run_number }}
+        path: |
+          data/processed/
+          logs/
+        retention-days: 30
+    
+    - name: Send completion notification
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ DNC automation completed successfully"
+          echo "Client: ${{ github.event.inputs.client_name || 'test_client' }}"
+          echo "Mode: ${{ github.event.inputs.dry_run || 'true' == 'true' && 'Dry Run' || 'Production' }}"
+          echo "Results available in workflow artifacts"
+        else
+          echo "❌ DNC automation failed"
+          echo "Check workflow logs for details"
+        fi
+    
+    - name: Cleanup temporary files
+      if: always()
+      run: |
+        echo "🧹 Cleaning up temporary files..."
+        # Keep processed files but clean up any temporary data
+        find data/uploads -name "*.tmp" -delete 2>/dev/null || true
+        find logs -name "*.tmp" -delete 2>/dev/null || true
+        echo "Cleanup completed"
+
+  post-automation:
+    needs: dnc-automation
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Automation summary
+      run: |
+        echo "📊 DNC Automation Summary"
+        echo "========================"
+        echo "Status: ${{ needs.dnc-automation.result }}"
+        echo "Client: ${{ github.event.inputs.client_name || 'test_client' }}"
+        echo "Dry Run: ${{ github.event.inputs.dry_run || 'true' }}"
+        echo "Workflow: ${{ github.workflow }}"
+        echo "Run Number: ${{ github.run_number }}"
+        echo "Commit: ${{ github.sha }}"
+        echo "========================"
+        
+        if [ "${{ needs.dnc-automation.result }}" == "success" ]; then
+          echo "✅ Automation completed successfully"
+          echo "📁 Results archived in workflow artifacts"
+          echo "📧 Email notifications sent (if configured)"
+        else
+          echo "❌ Automation failed - check logs for details"
+          echo "🔍 Review workflow logs and contact support if needed"
+        fi
