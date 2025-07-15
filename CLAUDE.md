@@ -6,7 +6,7 @@ This project transforms an existing manual DNC (Do Not Call) checking system int
 - Update both company and contact lifecycle statuses in HubSpot
 - Run automatically via GitHub Actions
 - Send email notifications with results
-- Handle multiple client configurations
+- Handle multiple clients dynamically based on DNC file names
 
 ## Core Repository Integration
 The existing DNC matching logic is located at: https://github.com/Jonathan-hanekom-punchb2b/dnc_checker
@@ -74,8 +74,7 @@ dnc_automator/
 │   └── archived/                 # Historical data
 ├── logs/                         # Application logs
 ├── config/
-│   ├── clients.yaml              # Client configurations
-│   └── hubspot_mappings.yaml     # Field mappings
+│   └── hubspot_mappings.yaml     # Field mappings (optional)
 ├── .github/workflows/
 │   └── dnc_automation.yml        # GitHub Actions workflow
 ├── .env.example                  # Environment variables template
@@ -121,12 +120,25 @@ dnc_automator/
 ### 4. Main Orchestration (`src/main.py`)
 - **Purpose**: Coordinate all components in complete workflow
 - **Workflow**:
-  1. Load and validate DNC list
-  2. Fetch HubSpot companies
-  3. Check for matches using enhanced logic
-  4. Update company and contact statuses
-  5. Generate results and send notifications
+  1. Scan for DNC files in uploads directory
+  2. Extract client name from file name
+  3. Load and validate DNC list
+  4. Fetch HubSpot companies
+  5. Check for matches using enhanced logic
+  6. Update company and contact statuses (using dynamic property names)
+  7. Generate results and send notifications
+  8. Archive processed files
 - **Error Handling**: Comprehensive error capture and notification
+
+### 5. File Processing (`src/utils/file_handler.py`)
+- **Purpose**: Handle DNC file processing and client name extraction
+- **Key Features**:
+  - Extract client name from file name patterns
+  - Generate dynamic HubSpot property names
+  - Google Drive integration for file retrieval
+  - File validation and CSV processing
+- **Naming Convention**: Expected format `{client_name}_YYYY-MM-DD.csv` or `{client_name}_dnc_list.csv`
+- **Property Mapping**: `client_name` → `{client_name}_account_status` and `{client_name}_funnel_status`
 
 ## Environment Configuration
 ```bash
@@ -148,10 +160,15 @@ FUZZY_THRESHOLD_REVIEW=85
 COMPANY_BATCH_SIZE=100
 CONTACT_BATCH_SIZE=500
 
-# Client Configuration
-CLIENT_NAME=test_client
-COMPANY_STATUS_PROPERTY=test_client_account_status
-CONTACT_STATUS_PROPERTY=test_client_funnel_status
+# Dynamic Client Configuration
+# Client name extracted from DNC file name (e.g., "client_name_2024-07-15.csv")
+# HubSpot properties generated as: {client_name}_account_status, {client_name}_funnel_status
+COMPANY_STATUS_SUFFIX=_account_status
+CONTACT_STATUS_SUFFIX=_funnel_status
+
+# Google Drive Integration (optional)
+GOOGLE_DRIVE_FOLDER_ID=your_folder_id_here
+GOOGLE_DRIVE_CREDENTIALS_PATH=path/to/credentials.json
 
 # File paths
 DNC_UPLOAD_PATH=data/uploads
@@ -248,8 +265,11 @@ gh pr create --base main --title "hotfix: Critical fix title"
 #### 3. Scheduled DNC Automation (`.github/workflows/dnc-automation.yml`)
 **Triggers**: Scheduled runs (configurable)
 **Actions**:
-- Run DNC automation against HubSpot
-- Process results and update statuses
+- Download DNC files from Google Drive (if configured)
+- Scan uploads directory for DNC files
+- Extract client names from file names
+- Run DNC automation against HubSpot for each client
+- Process results and update statuses using dynamic property names
 - Send email notifications
 - Archive processed files
 
