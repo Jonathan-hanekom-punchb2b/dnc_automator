@@ -503,5 +503,8 @@ The system uses a three-tier matching approach:
 - Review logs in GitHub Actions for run details
 - Email notifications provide run summaries
 - Contact development team for complex issues
+- Always reference official documentation for HubSpot (https://developers.hubspot.com/docs/)
+- Always reference official documentation for Google Drive API (https://developers.google.com/workspace/drive/api/guides/about-sdk)
+
 
 This guide provides comprehensive information for developing, testing, and maintaining the DNC automation system. The modular architecture allows for incremental development and easy maintenance.

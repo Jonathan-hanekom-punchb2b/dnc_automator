@@ -69,3 +69,12 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Sensitive configuration files
+config/
+!config/.gitkeep
+*.json
+*.pickle
+*_credentials*
+*_token*
+*oauth*
