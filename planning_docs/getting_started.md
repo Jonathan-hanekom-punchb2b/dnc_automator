@@ -564,7 +564,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 @dataclass
-class DNSMatch:
+class DNCMatch:
     """Represents a DNC match result"""
     company_id: str
     company_name: str
@@ -593,7 +593,7 @@ class DNCChecker:
     
     def check_companies_against_dnc(self, 
                                    hubspot_companies: List[Dict], 
-                                   dnc_df: pd.DataFrame) -> List[DNSMatch]:
+                                   dnc_df: pd.DataFrame) -> List[DNCMatch]:
         """Check all HubSpot companies against DNC list"""
         matches = []
         
@@ -608,7 +608,7 @@ class DNCChecker:
     
     def _check_single_company(self, 
                              hubspot_company: Dict, 
-                             dnc_df: pd.DataFrame) -> List[DNSMatch]:
+                             dnc_df: pd.DataFrame) -> List[DNCMatch]:
         """Check a single HubSpot company against DNC list"""
         matches = []
         
@@ -622,7 +622,7 @@ class DNCChecker:
         # Check exact matches first
         exact_match = self._check_exact_match(company_name, dnc_df)
         if exact_match:
-            matches.append(DNSMatch(
+            matches.append(DNCMatch(
                 company_id=company_id,
                 company_name=company_name,
                 dnc_company_name=exact_match,
@@ -636,7 +636,7 @@ class DNCChecker:
         if company_domain:
             domain_match = self._check_domain_match(company_domain, dnc_df)
             if domain_match:
-                matches.append(DNSMatch(
+                matches.append(DNCMatch(
                     company_id=company_id,
                     company_name=company_name,
                     dnc_company_name=domain_match,
@@ -680,7 +680,7 @@ class DNCChecker:
         
         return None
     
-    def _check_fuzzy_match(self, company_name: str, dnc_df: pd.DataFrame) -> DNSMatch:
+    def _check_fuzzy_match(self, company_name: str, dnc_df: pd.DataFrame) -> DNCMatch:
         """Check for fuzzy company name matches"""
         company_clean = company_name.strip().lower()
         
@@ -703,7 +703,7 @@ class DNCChecker:
                 else:
                     return None
                 
-                return DNSMatch(
+                return DNCMatch(
                     company_id='',  # Will be set by caller
                     company_name=company_name,
                     dnc_company_name=original_name,
@@ -1241,7 +1241,7 @@ from dotenv import load_dotenv
 # Add src to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from src.core.dnc_logic import DNCChecker, DNSMatch
+from src.core.dnc_logic import DNCChecker, DNCMatch
 from src.hubspot.client import HubSpotClient, UpdateResult
 from src.notifications.email_sender import EmailNotifier
 from src.utils.logger import setup_logging
@@ -1366,7 +1366,7 @@ class DNCAutomation:
             self.run_summary['errors'].append(f"DNC list loading: {str(e)}")
             return None
     
-    def _process_matches(self, matches: List[DNSMatch]) -> bool:
+    def _process_matches(self, matches: List[DNCMatch]) -> bool:
         """Process DNC matches and update HubSpot"""
         
         try:

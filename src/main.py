@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Add src to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from src.core.dnc_logic import DNCChecker, DNSMatch
+from src.core.dnc_logic import DNCChecker, DNCMatch
 from src.hubspot.client import HubSpotClient, UpdateResult
 from src.notifications.email_sender import EmailNotifier
 from src.utils.logger import setup_logging
@@ -139,7 +139,7 @@ class DNCAutomation:
             self.run_summary['errors'].append(f"DNC list loading: {str(e)}")
             return None
     
-    def _process_matches(self, matches: List[DNSMatch]) -> bool:
+    def _process_matches(self, matches: List[DNCMatch]) -> bool:
         """Process DNC matches and update HubSpot"""
         
         try:
