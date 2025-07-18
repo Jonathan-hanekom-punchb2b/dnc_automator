@@ -18,7 +18,7 @@ _RE_MULTIPLE_SPACES = re.compile(r'\s+')
 _RE_COMPANY_SUFFIXES = re.compile(r'\b(inc|ltd|llc|corp|pty|co|the)\b\.?$', re.IGNORECASE)
 
 @dataclass
-class DNSMatch:
+class DNCMatch:
     """Represents a DNC match result"""
     company_id: str
     company_name: str
@@ -92,7 +92,7 @@ class DNCChecker:
     
     def check_companies_against_dnc(self, 
                                    hubspot_companies: List[Dict], 
-                                   dnc_df: pd.DataFrame) -> List[DNSMatch]:
+                                   dnc_df: pd.DataFrame) -> List[DNCMatch]:
         """Check all HubSpot companies against DNC list"""
         logger.info(f"Checking {len(hubspot_companies)} companies against DNC list")
         
@@ -120,7 +120,7 @@ class DNCChecker:
                              hubspot_company: Dict, 
                              dnc_df: pd.DataFrame,
                              dnc_companies_set: set,
-                             dnc_domains_set: set) -> List[DNSMatch]:
+                             dnc_domains_set: set) -> List[DNCMatch]:
         """Check a single HubSpot company against DNC list"""
         matches = []
         
@@ -138,7 +138,7 @@ class DNCChecker:
         # Check exact company name match first
         exact_match = self._check_exact_match(company_name_clean, dnc_companies_set, dnc_df)
         if exact_match:
-            matches.append(DNSMatch(
+            matches.append(DNCMatch(
                 company_id=company_id,
                 company_name=company_name,
                 dnc_company_name=exact_match,
@@ -152,7 +152,7 @@ class DNCChecker:
         if company_domain_clean and dnc_domains_set:
             domain_match = self._check_domain_match(company_domain_clean, dnc_domains_set, dnc_df)
             if domain_match:
-                matches.append(DNSMatch(
+                matches.append(DNCMatch(
                     company_id=company_id,
                     company_name=company_name,
                     dnc_company_name=domain_match,
@@ -187,7 +187,7 @@ class DNCChecker:
             return match_row['company_name']
         return None
     
-    def _check_fuzzy_match(self, company_name_clean: str, dnc_companies_set: set, dnc_df: pd.DataFrame) -> DNSMatch:
+    def _check_fuzzy_match(self, company_name_clean: str, dnc_companies_set: set, dnc_df: pd.DataFrame) -> DNCMatch:
         """Check for fuzzy company name matches"""
         if not company_name_clean or not dnc_companies_set:
             return None
@@ -209,7 +209,7 @@ class DNCChecker:
             else:
                 return None
             
-            return DNSMatch(
+            return DNCMatch(
                 company_id='',  # Will be set by caller
                 company_name='',  # Will be set by caller
                 dnc_company_name=original_name,

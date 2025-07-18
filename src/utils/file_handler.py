@@ -6,8 +6,9 @@ import shutil
 import glob
 import pandas as pd
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -120,3 +121,62 @@ class FileHandler:
             result['errors'].append(f"Error reading file: {str(e)}")
         
         return result
+    
+    def extract_client_name(self, filename: str) -> str:
+        """
+        Extract client name from filename
+        Expected format: client_name_16-07-25.csv
+        """
+        # Remove .csv extension
+        if not filename.endswith('.csv'):
+            raise ValueError(f"Invalid file format: {filename} (must be .csv)")
+        
+        name_without_ext = filename[:-4]  # Remove .csv
+        
+        # Pattern: client_name_DD-MM-YY
+        pattern = r'^(.+)_(\d{2}-\d{2}-\d{2})$'
+        match = re.match(pattern, name_without_ext)
+        
+        if not match:
+            raise ValueError(f"Invalid filename format: {filename} (expected: client_name_16-07-25.csv)")
+        
+        client_name = match.group(1)
+        date_part = match.group(2)
+        
+        # Validate date format
+        if not re.match(r'^\d{2}-\d{2}-\d{2}$', date_part):
+            raise ValueError(f"Invalid date format in filename: {filename}")
+        
+        return client_name
+    
+    def generate_company_property_name(self, client_name: str) -> str:
+        """Generate HubSpot company property name from client name"""
+        return f"{client_name}_account_status"
+    
+    def generate_contact_property_name(self, client_name: str) -> str:
+        """Generate HubSpot contact property name from client name"""
+        return f"{client_name}_funnel_status"
+    
+    def get_all_client_files(self) -> Dict[str, str]:
+        """
+        Get all client files from upload path
+        Returns dict mapping client_name -> file_path
+        """
+        client_files = {}
+        
+        # Look for files matching pattern: *_DD-MM-YY.csv
+        pattern = os.path.join(self.upload_path, "*_??-??-??.csv")
+        files = glob.glob(pattern)
+        
+        for file_path in files:
+            filename = os.path.basename(file_path)
+            try:
+                client_name = self.extract_client_name(filename)
+                # If multiple files for same client, keep the most recent
+                if client_name not in client_files or os.path.getmtime(file_path) > os.path.getmtime(client_files[client_name]):
+                    client_files[client_name] = file_path
+            except ValueError as e:
+                logger.warning(f"Skipping invalid filename {filename}: {e}")
+                continue
+        
+        return client_files

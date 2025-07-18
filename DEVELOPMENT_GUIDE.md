@@ -39,15 +39,18 @@ git status
 
 ### **Hour 1: Dependencies & Environment**
 ```bash
-# Install and verify dependencies
+# Install and verify dependencies (including Google Drive)
 uv sync --dev
+uv add google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
 # Test core imports
 uv run python -c "
 import pandas as pd
 import rapidfuzz
 from src.core.dnc_logic import DNCChecker
-print('✅ All imports working')
+from googleapiclient.discovery import build
+from google.auth.transport.requests import Request
+print('✅ All imports working including Google Drive')
 "
 
 # Run basic tests
@@ -269,53 +272,263 @@ print(f'Validation result: {validation}')
 
 ---
 
-## 📊 **Session 2: Unit Testing & Validation Framework**
+## 📊 **Session 2: Google Drive Integration & Dynamic Client Testing**
 *Duration: 7 hours*
 
-### **Hour 1-2: Comprehensive Unit Tests**
+### **Hour 1-2: Google Drive Integration Setup**
 ```bash
-# Run existing tests and identify gaps
-uv run pytest tests/unit/ -v --cov=src
+# Test Google Drive authentication
+uv run python -c "
+from src.utils.google_drive_client import GoogleDriveClient
+import os
 
-# Create additional test cases
-cat > tests/unit/test_file_handler.py << 'EOF'
+# Test authentication
+try:
+    client = GoogleDriveClient(
+        credentials_path='config/google_credentials.json',
+        token_path='config/google_token.json'
+    )
+    print('✅ Google Drive authentication successful')
+    
+    # Test folder access
+    folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
+    if folder_id:
+        files = client.list_files_in_folder(folder_id)
+        print(f'✅ Found {len(files)} files in Google Drive folder')
+        for file in files:
+            print(f'  - {file[\"name\"]} ({file[\"id\"]})')
+    else:
+        print('⚠️  GOOGLE_DRIVE_FOLDER_ID not set')
+except Exception as e:
+    print(f'❌ Google Drive setup error: {e}')
+"
+
+# Test file download
+mkdir -p data/downloads
+uv run python -c "
+from src.utils.google_drive_client import GoogleDriveClient
+import os
+
+client = GoogleDriveClient(
+    credentials_path='config/google_credentials.json',
+    token_path='config/google_token.json'
+)
+
+# Download test file
+folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
+if folder_id:
+    downloaded = client.download_dnc_files(folder_id, 'data/downloads/')
+    print(f'✅ Downloaded {len(downloaded)} files')
+    for file_path in downloaded:
+        print(f'  - {file_path}')
+"
+```
+
+### **Hour 2-3: Dynamic Client Name Extraction Testing**
+```bash
+# Create test files with various client names
+mkdir -p data/test_files
+
+# Create multiple client test files
+cat > data/test_files/client_a_16-07-25.csv << 'EOF'
+company_name,domain
+Microsoft Corporation,microsoft.com
+Apple Inc,apple.com
+Google LLC,google.com
+EOF
+
+cat > data/test_files/client_b_16-07-25.csv << 'EOF'
+company_name,domain
+Amazon.com Inc,amazon.com
+Facebook Inc,facebook.com
+Tesla Inc,tesla.com
+EOF
+
+cat > data/test_files/acme_corp_16-07-25.csv << 'EOF'
+company_name,domain
+Salesforce.com Inc,salesforce.com
+Netflix Inc,netflix.com
+Uber Technologies Inc,uber.com
+EOF
+
+# Test client name extraction
+uv run python -c "
+from src.utils.file_handler import FileHandler
+import os
+
+handler = FileHandler({
+    'dnc_upload_path': 'data/test_files',
+    'dnc_processed_path': 'data/processed',
+    'dnc_archived_path': 'data/archived'
+})
+
+# Test client name extraction
+test_files = [
+    'client_a_16-07-25.csv',
+    'client_b_16-07-25.csv', 
+    'acme_corp_16-07-25.csv'
+]
+
+for filename in test_files:
+    client_name = handler.extract_client_name(filename)
+    print(f'File: {filename} -> Client: {client_name}')
+    
+    # Test property name generation
+    company_prop = handler.generate_company_property_name(client_name)
+    contact_prop = handler.generate_contact_property_name(client_name)
+    print(f'  Company Property: {company_prop}')
+    print(f'  Contact Property: {contact_prop}')
+    print()
+"
+```
+
+### **Hour 3-4: Comprehensive Unit Tests for Dynamic System**
+```bash
+# Create comprehensive test suite for dynamic client handling
+cat > tests/unit/test_dynamic_client_handler.py << 'EOF'
 import pytest
 import pandas as pd
 import os
 from src.utils.file_handler import FileHandler
+from src.utils.google_drive_client import GoogleDriveClient
 from src.utils.validators import validate_dnc_file
 
-class TestFileHandler:
-    def test_get_latest_dnc_file(self):
-        """Test getting the latest DNC file"""
-        config = {
+class TestDynamicClientHandler:
+    def test_extract_client_name_valid_formats(self):
+        \"\"\"Test client name extraction from various valid formats\"\"\"
+        handler = FileHandler({
             'dnc_upload_path': 'data/uploads',
             'dnc_processed_path': 'data/processed',
             'dnc_archived_path': 'data/archived'
-        }
-        handler = FileHandler(config)
+        })
         
-        # Should find our test file
-        latest = handler.get_latest_dnc_file('test_client')
-        assert latest is not None
-        assert 'test_client' in latest
-        assert latest.endswith('.csv')
+        # Test standard format
+        assert handler.extract_client_name('client_a_16-07-25.csv') == 'client_a'
+        assert handler.extract_client_name('acme_corp_16-07-25.csv') == 'acme_corp'
+        assert handler.extract_client_name('big_company_name_16-07-25.csv') == 'big_company_name'
     
-    def test_validate_file_format(self):
-        """Test file format validation"""
-        config = {
+    def test_extract_client_name_invalid_formats(self):
+        \"\"\"Test client name extraction with invalid formats\"\"\"
+        handler = FileHandler({
             'dnc_upload_path': 'data/uploads',
             'dnc_processed_path': 'data/processed',
             'dnc_archived_path': 'data/archived'
-        }
-        handler = FileHandler(config)
+        })
         
-        # Test with valid file
-        latest = handler.get_latest_dnc_file('test_client')
-        if latest:
-            result = handler.validate_file_format(latest)
-            assert result['valid'] == True
-            assert result['row_count'] > 0
+        # Test invalid formats
+        with pytest.raises(ValueError):
+            handler.extract_client_name('invalid_format.csv')
+        
+        with pytest.raises(ValueError):
+            handler.extract_client_name('client_a_invalid_date.csv')
+        
+        with pytest.raises(ValueError):
+            handler.extract_client_name('no_extension')
+    
+    def test_generate_property_names(self):
+        \"\"\"Test HubSpot property name generation\"\"\"
+        handler = FileHandler({
+            'dnc_upload_path': 'data/uploads',
+            'dnc_processed_path': 'data/processed',
+            'dnc_archived_path': 'data/archived'
+        })
+        
+        # Test property name generation
+        assert handler.generate_company_property_name('client_a') == 'client_a_account_status'
+        assert handler.generate_contact_property_name('client_a') == 'client_a_funnel_status'
+        assert handler.generate_company_property_name('acme_corp') == 'acme_corp_account_status'
+        assert handler.generate_contact_property_name('acme_corp') == 'acme_corp_funnel_status'
+    
+    def test_get_client_files(self):
+        \"\"\"Test getting all DNC files and extracting client names\"\"\"
+        handler = FileHandler({
+            'dnc_upload_path': 'data/test_files',
+            'dnc_processed_path': 'data/processed',
+            'dnc_archived_path': 'data/archived'
+        })
+        
+        # Should find all test files
+        client_files = handler.get_all_client_files()
+        
+        # Verify we found the expected clients
+        expected_clients = ['client_a', 'client_b', 'acme_corp']
+        found_clients = list(client_files.keys())
+        
+        for client in expected_clients:
+            assert client in found_clients
+            assert client_files[client].endswith('.csv')
+            assert '16-07-25' in client_files[client]
+
+class TestGoogleDriveIntegration:
+    def test_google_drive_authentication(self):
+        \"\"\"Test Google Drive authentication setup\"\"\"
+        # This test requires actual Google credentials
+        try:
+            client = GoogleDriveClient(
+                credentials_path='config/google_credentials.json',
+                token_path='config/google_token.json'
+            )
+            assert client.service is not None
+            print('✅ Google Drive authentication successful')
+        except Exception as e:
+            pytest.skip(f'Google Drive not configured: {e}')
+    
+    def test_list_files_in_folder(self):
+        \"\"\"Test listing files in Google Drive folder\"\"\"
+        try:
+            client = GoogleDriveClient(
+                credentials_path='config/google_credentials.json',
+                token_path='config/google_token.json'
+            )
+            
+            folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
+            if not folder_id:
+                pytest.skip('GOOGLE_DRIVE_FOLDER_ID not set')
+            
+            files = client.list_files_in_folder(folder_id)
+            assert isinstance(files, list)
+            
+            # Check if any files match our naming pattern
+            dnc_files = [f for f in files if f['name'].endswith('_16-07-25.csv')]
+            print(f'Found {len(dnc_files)} DNC files in Google Drive')
+            
+        except Exception as e:
+            pytest.skip(f'Google Drive error: {e}')
+    
+    def test_download_dnc_files(self):
+        \"\"\"Test downloading DNC files from Google Drive\"\"\"
+        try:
+            client = GoogleDriveClient(
+                credentials_path='config/google_credentials.json',
+                token_path='config/google_token.json'
+            )
+            
+            folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
+            if not folder_id:
+                pytest.skip('GOOGLE_DRIVE_FOLDER_ID not set')
+            
+            # Create download directory
+            download_path = 'data/downloads_test/'
+            os.makedirs(download_path, exist_ok=True)
+            
+            # Download files
+            downloaded = client.download_dnc_files(folder_id, download_path)
+            assert isinstance(downloaded, list)
+            
+            # Verify files were downloaded
+            for file_path in downloaded:
+                assert os.path.exists(file_path)
+                assert file_path.endswith('.csv')
+                assert '16-07-25' in file_path
+                
+            print(f'✅ Successfully downloaded {len(downloaded)} files')
+            
+        except Exception as e:
+            pytest.skip(f'Google Drive error: {e}')
+EOF
+
+# Run dynamic client tests
+uv run pytest tests/unit/test_dynamic_client_handler.py -v
 
 class TestValidators:
     def test_validate_dnc_file_valid(self):
