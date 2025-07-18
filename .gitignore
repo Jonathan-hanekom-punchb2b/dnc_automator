@@ -69,3 +69,13 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Sensitive configuration files
+config/*.json
+config/*.pickle
+config/*_credentials*
+config/*_token*
+config/*oauth*
+
+# Test files with sensitive data
+test_oauth_drive.py
